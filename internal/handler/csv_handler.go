@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -42,34 +43,47 @@ func ProcessCSVFile(filePath string) error {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("csv could not be opened: %v", err)
+		return fmt.Errorf("could not open file: %v", err)
 	}
 	defer file.Close()
 
 	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		return fmt.Errorf("csv could not be read: %v", err)
-	}
+	reader.Comma = ';'
 
-	// Loop through each line of the CSV file and send it as JSON to RabbitMQ
-	for _, record := range records {
-		date, err := time.Parse(time.RFC3339, record[1])
-		if err != nil {
-			log.Printf("date could not be converted: %v", err)
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
 		}
+
+		if err != nil {
+			return fmt.Errorf("csv could not be read: %v", err)
+		}
+
 		age, err := strconv.Atoi(record[4])
 		if err != nil {
 			log.Printf("age could not be converted: %v", err)
+			continue
 		}
+
 		amount, err := strconv.ParseFloat(record[5], 64)
 		if err != nil {
 			log.Printf("amount could not be converted: %v", err)
+			continue
 		}
+
 		installments, err := strconv.Atoi(record[6])
 		if err != nil {
 			log.Printf("installments could not be converted: %v", err)
+			continue
 		}
+
+		date, err := time.Parse(time.RFC3339, record[1])
+		if err != nil {
+			log.Printf("date could not be converted: %v", err)
+			continue
+		}
+
 		transaction := dto.Transaction{
 			ID:           record[0],
 			Date:         date,
@@ -85,6 +99,8 @@ func ProcessCSVFile(filePath string) error {
 			log.Printf("JSON could not be created: %v", err)
 			continue
 		}
+
+		fmt.Printf("Sending message: %s\n", jsonData)
 
 		// publish the message to the queue
 		err = ch.Publish(
