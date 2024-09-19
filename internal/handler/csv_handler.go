@@ -100,8 +100,6 @@ func ProcessCSVFile(filePath string) error {
 			continue
 		}
 
-		fmt.Printf("Sending message: %s\n", jsonData)
-
 		// publish the message to the queue
 		err = ch.Publish(
 			"",         // exchange
