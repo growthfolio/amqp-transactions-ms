@@ -2,13 +2,13 @@ package main
 
 import (
 	"log"
-	"transaction-producer-ms/internal/handler"
+
+	"github.com/felipemacedo1/transaction-producer-ms/internal/handler"
 )
 
 func main() {
-	// Inicia o processamento do arquivo CSV
-	err := handler.ProcessCSVFile("input-data.csv")
+	err := handler.ProcessCSVFile("input/input-data.csv")
 	if err != nil {
-		log.Fatal("Erro ao processar o arquivo CSV:", err)
+		log.Fatal("error processing csv file: ", err)
 	}
 }

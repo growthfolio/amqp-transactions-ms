@@ -4,7 +4,7 @@ services:
     image: "rabbitmq:3-management"
     ports:
       - "5672:5672"
-      - "15672:15672"  # Porta para o painel de controle web do RabbitMQ
+      - "15672:15672"  # RabbitMQ Management Plugin
 
   app:
     build: .
