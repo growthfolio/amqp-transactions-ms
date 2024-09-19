@@ -85,13 +85,13 @@ func ProcessCSVFile(filePath string) error {
 		}
 
 		transaction := dto.Transaction{
-			ID:           record[0],
-			Date:         date,
-			Document:     record[2],
-			Name:         record[3],
-			Age:          age,
-			Amount:       amount,
-			Installments: installments,
+			TransactionID: record[0],
+			Date:          date,
+			ClientID:      record[2],
+			Name:          record[3],
+			Age:           age,
+			Amount:        amount,
+			Installments:  installments,
 		}
 
 		jsonData, err := json.Marshal(transaction)
