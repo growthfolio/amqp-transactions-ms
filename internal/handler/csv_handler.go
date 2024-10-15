@@ -39,7 +39,7 @@ func ProcessCSVFile(filePath string) error {
 
 // connectRabbitMQ establishes a connection and channel with RabbitMQ.
 func connectRabbitMQ() (*amqp.Connection, *amqp.Channel, error) {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	if err != nil {
 		return nil, nil, fmt.Errorf("rabbitmq connection could not be established: %v", err)
 	}
