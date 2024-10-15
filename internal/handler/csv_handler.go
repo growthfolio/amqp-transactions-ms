@@ -14,21 +14,47 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// ProcessCSVFile processes a CSV file and sends data to RabbitMQ.
 func ProcessCSVFile(filePath string) error {
-
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	conn, ch, err := connectRabbitMQ()
 	if err != nil {
-		return fmt.Errorf("rabbitmq connection could not be established: %v", err)
+		return err
 	}
 	defer conn.Close()
-
-	// create a channel
-	ch, err := conn.Channel()
-	if err != nil {
-		return fmt.Errorf("channel could not be created: %v", err)
-	}
 	defer ch.Close()
 
+	queue, err := declareQueue(ch)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("could not open file: %v", err)
+	}
+	defer file.Close()
+
+	return processRecords(file, ch, queue.Name)
+}
+
+// connectRabbitMQ establishes a connection and channel with RabbitMQ.
+func connectRabbitMQ() (*amqp.Connection, *amqp.Channel, error) {
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	if err != nil {
+		return nil, nil, fmt.Errorf("rabbitmq connection could not be established: %v", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return nil, nil, fmt.Errorf("channel could not be created: %v", err)
+	}
+
+	return conn, ch, nil
+}
+
+// declareQueue declares the queue to be used.
+func declareQueue(ch *amqp.Channel) (amqp.Queue, error) {
 	queue, err := ch.QueueDeclare(
 		"transaction_queue", // queue name
 		true,                // durable
@@ -38,15 +64,13 @@ func ProcessCSVFile(filePath string) error {
 		nil,                 // arguments
 	)
 	if err != nil {
-		return fmt.Errorf("queue could not be declared: %v", err)
+		return amqp.Queue{}, fmt.Errorf("queue could not be declared: %v", err)
 	}
+	return queue, nil
+}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("could not open file: %v", err)
-	}
-	defer file.Close()
-
+// processRecords processes each record in the CSV and sends to RabbitMQ.
+func processRecords(file io.Reader, ch *amqp.Channel, queueName string) error {
 	reader := csv.NewReader(file)
 	reader.Comma = ';'
 
@@ -55,66 +79,72 @@ func ProcessCSVFile(filePath string) error {
 		if err == io.EOF {
 			break
 		}
-
 		if err != nil {
-			return fmt.Errorf("csv could not be read: %v", err)
-		}
-
-		age, err := strconv.Atoi(record[4])
-		if err != nil {
-			log.Printf("age could not be converted: %v", err)
+			log.Printf("csv could not be read: %v", err)
 			continue
 		}
 
-		amount, err := strconv.ParseFloat(record[5], 64)
+		transaction, err := parseTransaction(record)
 		if err != nil {
-			log.Printf("amount could not be converted: %v", err)
+			log.Printf("transaction could not be parsed: %v", err)
 			continue
 		}
 
-		installments, err := strconv.Atoi(record[6])
-		if err != nil {
-			log.Printf("installments could not be converted: %v", err)
-			continue
-		}
-
-		date, err := time.Parse(time.RFC3339, record[1])
-		if err != nil {
-			log.Printf("date could not be converted: %v", err)
-			continue
-		}
-
-		transaction := dto.Transaction{
-			TransactionID: record[0],
-			Date:          date,
-			ClientID:      record[2],
-			Name:          record[3],
-			Age:           age,
-			Amount:        amount,
-			Installments:  installments,
-		}
-
-		jsonData, err := json.Marshal(transaction)
-		if err != nil {
-			log.Printf("JSON could not be created: %v", err)
-			continue
-		}
-
-		// publish the message to the queue
-		err = ch.Publish(
-			"",         // exchange
-			queue.Name, // routing key
-			false,      // mandatory
-			false,      // immediate
-			amqp.Publishing{
-				ContentType: "application/json",
-				Body:        jsonData,
-			},
-		)
-		if err != nil {
-			log.Printf("Message could not be sent: %v", err)
+		if err := publishTransaction(ch, queueName, transaction); err != nil {
+			log.Printf("transaction could not be sent: %v", err)
 		}
 	}
-
 	return nil
+}
+
+// parseTransaction parses the CSV record into a Transaction object.
+func parseTransaction(record []string) (*dto.Transaction, error) {
+	age, err := strconv.Atoi(record[4])
+	if err != nil {
+		return nil, fmt.Errorf("age could not be converted: %v", err)
+	}
+
+	amount, err := strconv.ParseFloat(record[5], 64)
+	if err != nil {
+		return nil, fmt.Errorf("amount could not be converted: %v", err)
+	}
+
+	installments, err := strconv.Atoi(record[6])
+	if err != nil {
+		return nil, fmt.Errorf("installments could not be converted: %v", err)
+	}
+
+	date, err := time.Parse(time.RFC3339, record[1])
+	if err != nil {
+		return nil, fmt.Errorf("date could not be converted: %v", err)
+	}
+
+	return &dto.Transaction{
+		TransactionID: record[0],
+		Date:          date,
+		ClientID:      record[2],
+		Name:          record[3],
+		Age:           age,
+		Amount:        amount,
+		Installments:  installments,
+	}, nil
+}
+
+// publishTransaction sends a transaction message to RabbitMQ.
+func publishTransaction(ch *amqp.Channel, queueName string, transaction *dto.Transaction) error {
+	jsonData, err := json.Marshal(transaction)
+	if err != nil {
+		return fmt.Errorf("JSON could not be created: %v", err)
+	}
+
+	return ch.Publish(
+		"",        // exchange
+		queueName, // routing key
+		false,     // mandatory
+		false,     // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        jsonData,
+		},
+	)
 }
