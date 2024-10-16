@@ -9,6 +9,8 @@ This is a Go-based microservice responsible for processing transaction data from
 - Converts data fields to the appropriate types (e.g., `time.Time` for dates, `float64` for amounts, and `int` for installments).
 - Handles errors during data parsing (e.g., skipping rows with invalid data).
 - Sends the processed transaction data to RabbitMQ in JSON format.
+- **Implements SOLID principles** with separation of concerns between file processing, message queuing, and business logic.
+- Uses **dependency injection** for the message broker, allowing easy replacement of RabbitMQ with other message brokers in the future.
 
 ## Project Structure
 
@@ -17,11 +19,15 @@ transaction-producer-ms/
 ├── cmd/
 │   └── main.go                   # Entry point of the microservice
 ├── internal/
-│   ├── handler/                  # Handles the processing of the CSV file
 │   ├── dto/                      # Defines the Transaction struct
-│   └── service/                  # Business logic (WIP)
+│   ├── handler/                  # (Deprecated) CSV processing logic
+│   ├── queue/                    # Message queue handling (RabbitMQ implementation)
+│   │   ├── queue.go              # Queue interface for abstraction
+│   │   └── rabbitmq.go           # RabbitMQ implementation of the Queue interface
+│   └── service/                  # Business logic for processing CSV files
+│       └── csv_service.go        # CSV processing and data handling
 └── input/                        
-│   └── input-data.csv            # Example transaction CSV file
+    └── input-data.csv            # Example transaction CSV file
 ```
 
 ## Prerequisites
@@ -52,18 +58,24 @@ go mod tidy
 go run cmd/main.go
 ```
 
-5. Place a CSV file in the `inputs/` directory for processing.
+5. Place a CSV file in the `input/` directory for processing.
 
 ## Usage
 
-The microservice automatically reads from the CSV file placed in the `inputs/` directory and processes the data. It then sends the data to RabbitMQ for consumption by other microservices. You can customize the RabbitMQ connection settings and CSV input file path in the configuration file or via environment variables.
+The microservice automatically reads from the CSV file placed in the `input/` directory and processes the data. It then sends the data to RabbitMQ for consumption by other microservices. You can customize the RabbitMQ connection settings and CSV input file path via environment variables.
 
 ## Configuration
 
 Environment variables:
 
 - `RABBITMQ_URL`: URL to connect to RabbitMQ (default: `amqp://guest:guest@localhost:5672/`).
-- `CSV_FILE_PATH`: Path to the input CSV file (default: `inputs/input-data.csv`).
+- `CSV_FILE_PATH`: Path to the input CSV file (default: `input/input-data.csv`).
+
+## Improvements and Changes
+
+- The **`handler` package** is now deprecated and replaced with a more modular approach.
+- The **`queue` package** introduces an abstraction layer for handling message queues, with RabbitMQ as the default implementation.
+- The **`service` package** handles the business logic for CSV processing, following the **Single Responsibility Principle (SRP)**.
 
 <!-- ## Testing
 
