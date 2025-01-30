@@ -40,7 +40,7 @@ transaction-producer-ms/
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/felipemacedo1/transaction-producer-ms.git
+git clone https://github.com/growthfolio/transaction-producer-ms.git
 cd transaction-producer-ms
 ```
 

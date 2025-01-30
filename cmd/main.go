@@ -1,23 +1,30 @@
 package main
 
 import (
-	"log"
-
-	"github.com/felipemacedo1/transaction-producer-ms/internal/queue"
-	"github.com/felipemacedo1/transaction-producer-ms/internal/service"
+	"github.com/growthfolio/transaction-producer-ms/internal/logging"
+	"github.com/growthfolio/transaction-producer-ms/internal/queue"
+	"github.com/growthfolio/transaction-producer-ms/internal/service"
 )
 
 func main() {
-	const filePath = "/app/input/input-data.csv"
+	const filePath = "../"
+	log := logging.Logger // Usando o logger global
+
+	log.Info("Starting application...")
+
 	rabbitMQ, err := queue.NewRabbitMQ("amqp://guest:guest@rabbitmq:5672/", "transaction_queue")
 	if err != nil {
-		log.Fatal("error connecting to RabbitMQ: ", err)
+		log.WithError(err).Fatal("Error connecting to RabbitMQ")
 	}
 	defer rabbitMQ.Close()
+
+	log.Info("Connected to RabbitMQ successfully")
 
 	csvService := service.NewCSVService(rabbitMQ)
 	err = csvService.ProcessCSVFile(filePath)
 	if err != nil {
-		log.Fatal("error processing csv file: ", err)
+		log.WithError(err).Fatal("Error processing CSV file")
 	}
+
+	log.Info("CSV processing completed successfully")
 }

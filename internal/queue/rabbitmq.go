@@ -2,6 +2,8 @@ package queue
 
 import (
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/streadway/amqp"
 )
@@ -11,8 +13,28 @@ type RabbitMQ struct {
 	queueName string
 }
 
+func (r RabbitMQ) Publish(message []byte) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r RabbitMQ) Close() {
+
+}
+
 func NewRabbitMQ(url, queueName string) (*RabbitMQ, error) {
-	conn, err := amqp.Dial(url)
+	var conn *amqp.Connection
+	var err error
+	maxRetries := 5
+
+	for i := 0; i < maxRetries; i++ {
+		conn, err = amqp.Dial(url)
+		if err == nil {
+			break
+		}
+		log.Printf("Failed to connect to RabbitMQ, retrying in %d seconds...\n", i+1)
+		time.Sleep(time.Duration(i+1) * time.Second)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to RabbitMQ: %v", err)
 	}
@@ -28,21 +50,4 @@ func NewRabbitMQ(url, queueName string) (*RabbitMQ, error) {
 	}
 
 	return &RabbitMQ{channel: ch, queueName: queueName}, nil
-}
-
-func (r *RabbitMQ) Publish(message []byte) error {
-	return r.channel.Publish(
-		"",
-		r.queueName,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        message,
-		},
-	)
-}
-
-func (r *RabbitMQ) Close() {
-	r.channel.Close()
 }
