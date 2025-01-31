@@ -7,10 +7,8 @@ import (
 	"io"
 	"os"
 	"strconv"
-	_ "strconv"
 	"sync"
 	"time"
-	_ "time"
 
 	"github.com/growthfolio/transaction-producer-ms/internal/dto"
 	"github.com/growthfolio/transaction-producer-ms/internal/logging"
@@ -31,27 +29,22 @@ func (s *CSVService) parseTransaction(record []string) (*dto.Transaction, error)
 	if len(record) < 7 {
 		return nil, fmt.Errorf("invalid record length: expected 7 fields, got %d", len(record))
 	}
-
 	age, err := strconv.Atoi(record[4])
 	if err != nil {
 		return nil, fmt.Errorf("age could not be converted: %v", err)
 	}
-
 	amount, err := strconv.ParseFloat(record[5], 64)
 	if err != nil {
 		return nil, fmt.Errorf("amount could not be converted: %v", err)
 	}
-
 	installments, err := strconv.Atoi(record[6])
 	if err != nil {
 		return nil, fmt.Errorf("installments could not be converted: %v", err)
 	}
-
 	date, err := time.Parse(time.RFC3339, record[1])
 	if err != nil {
 		return nil, fmt.Errorf("date could not be converted: %v", err)
 	}
-
 	return &dto.Transaction{
 		TransactionID: record[0],
 		Date:          date,
@@ -65,7 +58,6 @@ func (s *CSVService) parseTransaction(record []string) (*dto.Transaction, error)
 
 func (s *CSVService) ProcessCSVFile(filePath string) error {
 	logging.Logger.WithField("filePath", filePath).Info("Starting CSV processing")
-
 	file, err := os.Open(filePath)
 	if err != nil {
 		logging.Logger.WithError(err).Error("Could not open file")
@@ -75,6 +67,13 @@ func (s *CSVService) ProcessCSVFile(filePath string) error {
 
 	reader := csv.NewReader(file)
 	reader.Comma = ';'
+
+	// Skip header
+	_, err = reader.Read()
+	if err != nil {
+		logging.Logger.WithError(err).Error("Could not skip header")
+		return err
+	}
 
 	var wg sync.WaitGroup
 	ch := make(chan *dto.Transaction, 100)
@@ -89,7 +88,6 @@ func (s *CSVService) ProcessCSVFile(filePath string) error {
 				logging.Logger.WithError(err).Warn("JSON could not be created")
 				continue
 			}
-
 			if err := s.queue.Publish(jsonData); err != nil {
 				logging.Logger.WithError(err).
 					WithField("transactionId", transaction.TransactionID).
@@ -112,12 +110,10 @@ func (s *CSVService) ProcessCSVFile(filePath string) error {
 			errCh <- fmt.Errorf("csv could not be read: %v", err)
 			continue
 		}
-
 		wg.Add(1)
 		go func(record []string) {
 			defer wg.Done()
-
-			transaction, err := s.parseTransaction(record) // Corrigido: chamada correta
+			transaction, err := s.parseTransaction(record)
 			if err != nil {
 				logging.Logger.WithError(err).Warn("Transaction could not be parsed")
 				errCh <- fmt.Errorf("transaction could not be parsed: %v", err)
@@ -126,7 +122,6 @@ func (s *CSVService) ProcessCSVFile(filePath string) error {
 			ch <- transaction
 		}(record)
 	}
-
 	wg.Wait()
 	close(errCh) // Fechar errCh somente após todas as goroutines terminarem
 
@@ -134,7 +129,6 @@ func (s *CSVService) ProcessCSVFile(filePath string) error {
 	for err := range errCh {
 		logging.Logger.WithError(err).Warn("Processing error")
 	}
-
 	logging.Logger.Info("CSV processing completed")
 	return nil
 }
