@@ -1,14 +1,27 @@
 version: '3.8'
+
 services:
   rabbitmq:
     image: "rabbitmq:3-management"
     container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
-    image: "postgres:latest"
+    image: "postgres:15"
     container_name: postgres
     environment:
       POSTGRES_USER: user
@@ -16,16 +29,56 @@ services:
       POSTGRES_DB: transactions
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d transactions"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   producer:
     build: ./transaction-producer-ms
-    depends_on:
-      - rabbitmq
+    container_name: producer
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      INPUT_PATH: /app/data
+      QUEUE_NAME: transactions_queue
+      WORKERS: "4"
     volumes:
-      - ./hackathon-asapcard/INPUT:/app/input
+      - ./data:/app/data:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - appnet
+    restart: on-failure
 
   consumer:
     build: ./transaction-consumer-ms
+    container_name: consumer
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      POSTGRES_DSN: host=postgres user=user password=password dbname=transactions port=5432 sslmode=disable
+      QUEUE_NAME: transactions_queue
+      PREFETCH: "100"
+      WORKERS: "5"
+      BATCH_SIZE: "100"
     depends_on:
-      - rabbitmq
-      - postgres
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - appnet
+    restart: on-failure
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+
+networks:
+  appnet:
+    driver: bridge

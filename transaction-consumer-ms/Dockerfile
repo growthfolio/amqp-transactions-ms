@@ -1,5 +1,5 @@
 # Utilizando a imagem oficial do Go
-FROM golang:1.20
+FROM golang:1.22
 
 # Definir diretório de trabalho dentro do container
 WORKDIR /app
